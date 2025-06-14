@@ -1,20 +1,43 @@
 # Last modified: 2024-03-26
-from dotenv import load_dotenv
 
-load_dotenv()
-import requests
-from bs4 import BeautifulSoup, Tag
-import trafilatura
+# Standard library imports
 import logging
 import re
 import time
-from urllib.parse import urljoin, urlparse
-from typing import List, Dict, Optional, Tuple
-from db import db
 from datetime import datetime, timezone, timedelta
+from typing import List, Dict, Optional, Tuple, TypedDict, Union, Any
+from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
 
+# Third-party imports
+import requests
+from bs4 import BeautifulSoup, Tag
+import trafilatura
+from dotenv import load_dotenv
+
+# Local imports
+from db import db
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
 logger = logging.getLogger(__name__)
+
+class ArticleData(TypedDict):
+    url: str
+    title: str
+    preview: str
+    published_at: datetime
+    content: Optional[str]
+    quotes: List[str]
+    tags: List[str]
+
+class NewsItem(TypedDict):
+    url: str
+    title: str
+    preview: str
+    published_at: datetime
 
 class SmartLabScraper:
     def __init__(self):
@@ -30,10 +53,10 @@ class SmartLabScraper:
             'Upgrade-Insecure-Requests': '1',
         })
         # Кэш для хранения результатов парсинга
-        self._cache = {}
+        self._cache: Dict[str, Tuple[float, Union[List[NewsItem], ArticleData]]] = {}
         self._cache_ttl = 3600  # 1 час
 
-    def _get_cached_data(self, url: str) -> Optional[Dict]:
+    def _get_cached_data(self, url: str) -> Optional[Union[List[NewsItem], ArticleData]]:
         """Получает кэшированные данные по URL"""
         if url in self._cache:
             timestamp, data = self._cache[url]
@@ -41,7 +64,7 @@ class SmartLabScraper:
                 return data
         return None
 
-    def _cache_data(self, url: str, data: Dict) -> None:
+    def _cache_data(self, url: str, data: Union[List[NewsItem], ArticleData]) -> None:
         """Сохраняет данные в кэш"""
         self._cache[url] = (time.time(), data)
         # Ограничиваем размер кэша

@@ -1,18 +1,40 @@
+# Last modified: 2024-03-26
 from app import app
 from models import db, NewsArticle, PostingLog
+import logging
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
-MSK = ZoneInfo("Europe/Moscow")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-with app.app_context():
-    for article in NewsArticle.query.all():
-        if article.created_at and article.created_at.tzinfo is None:
-            article.created_at = article.created_at.replace(tzinfo=ZoneInfo('UTC')).astimezone(MSK)
-        if article.posted_at and article.posted_at.tzinfo is None:
-            article.posted_at = article.posted_at.replace(tzinfo=ZoneInfo('UTC')).astimezone(MSK)
-    for log in PostingLog.query.all():
-        if log.posted_at and log.posted_at.tzinfo is None:
-            log.posted_at = log.posted_at.replace(tzinfo=ZoneInfo('UTC')).astimezone(MSK)
-    db.session.commit()
+def migrate_to_msk():
+    try:
+        with app.app_context():
+            # Миграция NewsArticle
+            articles = NewsArticle.query.all()
+            for article in articles:
+                if article.published_at:
+                    article.published_at = article.published_at.astimezone(ZoneInfo("Europe/Moscow"))
+            db.session.commit()
+            logger.info(f"Migrated {len(articles)} articles to Moscow timezone")
 
-print("Migration to Europe/Moscow timezone complete.")
+            # Миграция PostingLog
+            logs = PostingLog.query.all()
+            for log in logs:
+                if log.posted_at:
+                    log.posted_at = log.posted_at.astimezone(ZoneInfo("Europe/Moscow"))
+            db.session.commit()
+            logger.info(f"Migrated {len(logs)} posting logs to Moscow timezone")
+
+            logger.info("Migration to Europe/Moscow timezone complete.")
+    except Exception as e:
+        logger.error(f"Error during migration: {e}")
+        raise
+
+if __name__ == "__main__":
+    migrate_to_msk()
