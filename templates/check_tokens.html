@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Проверка токенов - News Bot{% endblock %}
+{% block content %}
+<h1><i class="fas fa-key me-2"></i>Проверка видимости токенов</h1>
+<div class="card mt-4">
+    <div class="card-header">Статус переменных окружения</div>
+    <div class="card-body">
+        <table class="table table-bordered w-auto">
+            <thead>
+                <tr>
+                    <th>Имя токена</th>
+                    <th>Виден приложению?</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, visible in tokens.items() %}
+                <tr>
+                    <td><code>{{ name }}</code></td>
+                    <td>
+                        {% if visible %}
+                            <span class="badge bg-success">Да</span>
+                        {% else %}
+                            <span class="badge bg-danger">Нет</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="alert alert-info mt-3">
+            Для безопасности значения токенов не отображаются.<br>
+            Доступ к этой странице только с секретным параметром.
+        </div>
+    </div>
+</div>
+{% endblock %}

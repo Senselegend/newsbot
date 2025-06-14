@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+
+{% block title %}Аналитика{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Аналитика</h1>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Общая статистика</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="stat-item">
+                                <h3>{{ total_articles }}</h3>
+                                <p>Всего статей</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="stat-item">
+                                <h3>{{ posted_articles }}</h3>
+                                <p>Опубликовано</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="stat-item">
+                                <h3>{{ avg_summary_time }}с</h3>
+                                <p>Среднее время генерации резюме</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="stat-item">
+                                <h3>{{ avg_hashtags_time }}с</h3>
+                                <p>Среднее время генерации хештегов</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Источники новостей</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="sourcesChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Статистика по дням</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="dailyStatsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Данные для графика источников
+    const sourcesData = {
+        labels: [{% for source, count in sources.items() %}'{{ source }}',{% endfor %}],
+        datasets: [{
+            label: 'Количество статей',
+            data: [{% for source, count in sources.items() %}{{ count }},{% endfor %}],
+            backgroundColor: [
+                'rgba(255, 99, 132, 0.5)',
+                'rgba(54, 162, 235, 0.5)',
+                'rgba(255, 206, 86, 0.5)'
+            ],
+            borderColor: [
+                'rgba(255, 99, 132, 1)',
+                'rgba(54, 162, 235, 1)',
+                'rgba(255, 206, 86, 1)'
+            ],
+            borderWidth: 1
+        }]
+    };
+
+    // Создаем график источников
+    const sourcesCtx = document.getElementById('sourcesChart').getContext('2d');
+    const sourcesChart = new Chart(sourcesCtx, {
+        type: 'pie',
+        data: sourcesData,
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: 'Распределение по источникам'
+                }
+            }
+        }
+    });
+
+    // Данные для графика по дням
+    const dailyStats = {{ daily_stats|safe }};
+    
+    const dailyStatsData = {
+        labels: dailyStats.map(item => item.date),
+        datasets: [
+            {
+                label: 'Новые статьи',
+                data: dailyStats.map(item => item.articles),
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            },
+            {
+                label: 'Опубликовано',
+                data: dailyStats.map(item => item.posts),
+                backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1
+            }
+        ]
+    };
+
+    // Создаем график по дням
+    const dailyStatsCtx = document.getElementById('dailyStatsChart').getContext('2d');
+    const dailyStatsChart = new Chart(dailyStatsCtx, {
+        type: 'bar',
+        data: dailyStatsData,
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: 'Статистика по дням'
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

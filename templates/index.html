@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Панель управления - News Bot{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="fas fa-tachometer-alt me-2"></i>Панель управления</h1>
+            <div>
+                <form method="POST" action="{{ url_for('manual_scrape') }}" class="d-inline">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-sync me-1"></i>Парсить новости
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-newspaper fa-2x text-primary mb-2"></i>
+                        <h4>{{ total_articles }}</h4>
+                        <p class="text-muted">Всего статей</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                        <h4>{{ posted_articles }}</h4>
+                        <p class="text-muted">Опубликовано</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+                        <h4>{{ pending_articles }}</h4>
+                        <p class="text-muted">В очереди</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-calendar-day fa-2x text-info mb-2"></i>
+                        <h4 id="today-posts">-</h4>
+                        <p class="text-muted">Сегодня</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Articles -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-newspaper me-2"></i>Последние статьи</h5>
+                <a href="{{ url_for('articles') }}" class="btn btn-sm btn-outline-primary">
+                    Все статьи <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_articles %}
+                    <div class="list-group list-group-flush">
+                        {% for article in recent_articles %}
+                            <div class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="ms-2 me-auto">
+                                    <div class="fw-bold">
+                                        <a href="{{ url_for('article_detail', article_id=article.id) }}" class="text-decoration-none">
+                                            {{ article.title[:80] }}{% if article.title|length > 80 %}...{% endif %}
+                                        </a>
+                                    </div>
+                                    <small class="text-muted">
+                                        {{ article.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                    </small>
+                                    {% if article.hashtags %}
+                                        <div class="mt-1">
+                                            {% for tag in article.hashtags.split()[:3] %}
+                                                <span class="badge bg-secondary me-1">{{ tag }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="text-end">
+                                    {% if article.is_posted %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check me-1"></i>Опубликовано
+                                        </span>
+                                    {% elif article.summary %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-clock me-1"></i>Готово к публикации
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-cog me-1"></i>Обрабатывается
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-newspaper fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Пока нет статей. Нажмите "Парсить новости" для начала работы.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-md-4">
+        <!-- Bot Status -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-robot me-2"></i>Статус бота</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>Автопубликация:</span>
+                    {% if settings.posting_enabled %}
+                        <span class="badge bg-success">
+                            <i class="fas fa-play me-1"></i>Включена
+                        </span>
+                    {% else %}
+                        <span class="badge bg-secondary">
+                            <i class="fas fa-pause me-1"></i>Выключена
+                        </span>
+                    {% endif %}
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>Канал:</span>
+                    {% if settings.channel_id %}
+                        <code>{{ settings.channel_id }}</code>
+                    {% else %}
+                        <span class="text-muted">Не настроен</span>
+                    {% endif %}
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>Интервал:</span>
+                    <span>{{ settings.posting_interval }} мин</span>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>Лимит в день:</span>
+                    <span>{{ settings.max_articles_per_day }}</span>
+                </div>
+                
+                <hr>
+                
+                <a href="{{ url_for('settings') }}" class="btn btn-primary w-100">
+                    <i class="fas fa-cog me-1"></i>Настройки
+                </a>
+            </div>
+        </div>
+
+        <!-- Recent Posts -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-history me-2"></i>Последние публикации</h5>
+                <a href="{{ url_for('posting_logs') }}" class="btn btn-sm btn-outline-primary">
+                    Все логи <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_posts %}
+                    {% for post in recent_posts %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <small class="fw-bold">{{ post.article.title[:30] }}...</small><br>
+                                <small class="text-muted">{{ post.posted_at.strftime('%d.%m %H:%M') }}</small>
+                            </div>
+                            <div>
+                                {% if post.status == 'success' %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-times-circle text-danger"></i>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if not loop.last %}<hr class="my-2">{% endif %}
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-history fa-2x text-muted mb-2"></i>
+                        <p class="text-muted mb-0">Пока нет публикаций</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh stats every 30 seconds
+setInterval(function() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.today_posts !== undefined) {
+                document.getElementById('today-posts').textContent = data.today_posts;
+            }
+        })
+        .catch(error => console.log('Error fetching stats:', error));
+}, 30000);
+</script>
+{% endblock %}

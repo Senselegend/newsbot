@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}Настройки - News Bot{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h1><i class="fas fa-cog me-2"></i>Настройки бота</h1>
+        
+        <form method="POST" id="settings-form" class="needs-validation" novalidate>
+            <!-- AI Provider Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-brain me-2"></i>AI-провайдер для саммари</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="ai_provider" class="form-label">AI-провайдер для саммари</label>
+                        <select class="form-select" id="ai_provider" name="ai_provider" required>
+                            <option value="openrouter" {% if settings.ai_provider == 'openrouter' %}selected{% endif %}>OpenRouter (GPT/Claude)</option>
+                            <option value="gemini" {% if settings.ai_provider == 'gemini' %}selected{% endif %}>Google Gemini</option>
+                        </select>
+                        <div class="form-text">Выберите, какой AI использовать для генерации саммари и хештегов</div>
+                    </div>
+                </div>
+            </div>
+
+        <form method="POST" id="settings-form" class="needs-validation" novalidate>
+            <!-- Telegram Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fab fa-telegram me-2"></i>Настройки Telegram</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="channel_id" class="form-label">ID канала</label>
+                        <div class="input-group">
+                            <span class="input-group-text">@</span>
+                            <input type="text" class="form-control" id="channel_id" name="channel_id" 
+                                   value="{{ settings.channel_id or '' }}" 
+                                   placeholder="testingnewslala" required>
+                            <button type="button" class="btn btn-outline-primary" id="test-channel-btn">
+                                <i class="fas fa-test me-1"></i>Проверить канал
+                            </button>
+                        </div>
+                        <div class="form-text">Введите имя канала без @ или chat ID</div>
+                        <div id="test-result" class="alert" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Posting Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-clock me-2"></i>Настройки публикации</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="posting_enabled" 
+                                           name="posting_enabled" {{ 'checked' if settings.posting_enabled }}>
+                                    <label class="form-check-label" for="posting_enabled">
+                                        Включить автопубликацию
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="posting_interval" class="form-label">Интервал публикации (минуты)</label>
+                                <input type="number" class="form-control" id="posting_interval" 
+                                       name="posting_interval" value="{{ settings.posting_interval }}" 
+                                       min="5" max="1440" required>
+                                <div class="form-text">От 5 минут до 24 часов</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="max_articles_per_day" class="form-label">Максимум статей в день</label>
+                                <input type="number" class="form-control" id="max_articles_per_day" 
+                                       name="max_articles_per_day" value="{{ settings.max_articles_per_day }}" 
+                                       min="1" required>
+                                <div class="form-text">От 1 до 150 статей</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-edit me-2"></i>Настройки контента</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="summary_style" class="form-label">Стиль резюме</label>
+                                <select class="form-select" id="summary_style" name="summary_style" required>
+                                    <option value="engaging" {{ 'selected' if settings.summary_style == 'engaging' }}>
+                                        Увлекательный
+                                    </option>
+                                    <option value="formal" {{ 'selected' if settings.summary_style == 'formal' }}>
+                                        Деловой
+                                    </option>
+                                    <option value="casual" {{ 'selected' if settings.summary_style == 'casual' }}>
+                                        Разговорный
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="custom_hashtags" class="form-label">Дополнительные хештеги</label>
+                        <input type="text" class="form-control" id="custom_hashtags" 
+                               name="custom_hashtags" value="{{ settings.custom_hashtags or '' }}" 
+                               placeholder="#новости #smartlab #экономика">
+                        <div class="form-text">Хештеги через пробел, которые будут добавляться к каждой публикации</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <button type="submit" class="btn btn-primary btn-save-settings">
+                    <i class="fas fa-save me-1"></i>Сохранить настройки
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-md-4">
+        <!-- Status Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle me-2"></i>Информация</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Статус API:</strong>
+                    <div class="mt-1">
+                        <span class="badge bg-success">
+                            <i class="fas fa-check me-1"></i>OpenRouter подключен
+                        </span>
+                    </div>
+                    <div class="mt-1">
+                        <span class="badge bg-success">
+                            <i class="fas fa-check me-1"></i>Telegram бот активен
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <strong>Последнее обновление:</strong><br>
+                    <small class="text-muted">
+                        {{ settings.updated_at.strftime('%d.%m.%Y %H:%M') if settings.updated_at }}
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-rocket me-2"></i>Быстрые действия</h5>
+            </div>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-tachometer-alt me-1"></i>Панель управления
+                    </a>
+                    <form method="POST" action="{{ url_for('manual_scrape') }}" class="d-inline">
+                        <button type="submit" class="btn btn-outline-success w-100">
+                            <i class="fas fa-sync me-1"></i>Парсить новости
+                        </button>
+                    </form>
+                    <button type="button" class="btn btn-outline-warning" id="test-openrouter-btn">
+                        <i class="fas fa-plug me-1"></i>Проверить OpenRouter API
+                    </button>
+                    <button type="button" class="btn btn-outline-warning" id="test-gemini-btn">
+                        <i class="fas fa-plug me-1"></i>Проверить Gemini API
+                    </button>
+                    <button type="button" class="btn btn-outline-info" id="check-btn">
+                        <i class="fas fa-question-circle me-1"></i>Проверить откуда я
+                    </button>
+                    <div id="check-result"></div>
+                    <script>
+                    document.getElementById('check-btn').onclick = async function() {
+                        const res = await fetch('/check_location');
+                        const data = await res.json();
+                        document.getElementById('check-result').innerText =
+                            `Ваш IP: ${data.your_ip}\nСтатус Google API: ${data.google_api_status}`;
+                    };
+                    </script>
+                    <button type="button" class="btn btn-outline-info" id="check-gemini-models-btn">
+                        <i class="fas fa-list me-1"></i>Показать модели Gemini API
+                    </button>
+                    <div id="gemini-models-result" style="white-space: pre-wrap;"></div>
+                    <script>
+                    document.getElementById('check-gemini-models-btn').onclick = async function() {
+                        const res = await fetch('/check_gemini_models');
+                        const data = await res.text();
+                        document.getElementById('gemini-models-result').innerText = data;
+                    };
+                    </script>
+                    <button type="button" class="btn btn-outline-info" id="test-telegram-btn">
+                        <i class="fab fa-telegram me-1"></i>Тестовое сообщение в Telegram
+                    </button>
+                    <div id="api-test-result" class="alert mt-2" style="display:none;"></div>
+                    <a href="{{ url_for('articles') }}" class="btn btn-outline-info">
+                        <i class="fas fa-newspaper me-1"></i>Все статьи
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize channel testing
+document.addEventListener('DOMContentLoaded', function() {
+    const testBtn = document.getElementById('test-channel-btn');
+    if (testBtn) {
+        testBtn.addEventListener('click', function() {
+            testTelegramChannel();
+        });
+    }
+});
+</script>
+{% endblock %}

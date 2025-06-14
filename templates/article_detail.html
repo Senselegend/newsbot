@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% block title %}Детали статьи{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{{ article.title }}</h1>
+    
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Информация о статье</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>URL:</strong> <a href="{{ article.url }}" target="_blank">{{ article.url }}</a></p>
+                    <p><strong>Дата создания:</strong> {{ article.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                    <p><strong>Статус:</strong> 
+                        {% if article.is_posted %}
+                            <span class="badge bg-success">Опубликована</span>
+                            <span class="text-muted">({{ article.posted_at.strftime('%d.%m.%Y %H:%M') }})</span>
+                        {% else %}
+                            <span class="badge bg-warning">Не опубликована</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Предпросмотр сообщения</h5>
+                </div>
+                <div class="card-body">
+                    <div class="article-preview">
+                        {% if article.hashtags %}
+                        <div class="hashtags mb-2">{{ article.hashtags }}</div>
+                        {% endif %}
+                        <div class="summary mb-2">{{ article.summary }}</div>
+                        <div class="source">
+                            <a href="{{ article.url }}" target="_blank">Источник</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Резюме</h5>
+                    <form method="post" action="{{ url_for('regenerate_summary', article_id=article.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-primary">Сгенерировать заново</button>
+                    </form>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{{ url_for('edit_summary', article_id=article.id) }}">
+                        <div class="form-group">
+                            <textarea class="form-control" name="summary" rows="4">{{ article.summary }}</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-2">Сохранить изменения</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Хештеги</h5>
+                </div>
+                <div class="card-body">
+                    <p>{{ article.hashtags }}</p>
+                </div>
+            </div>
+            
+            {% if analytics %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Аналитика</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>AI провайдер:</strong> {{ analytics.ai_provider }}</p>
+                            <p><strong>Время генерации резюме:</strong> {{ "%.2f"|format(analytics.summary_generation_time or 0) }}с</p>
+                            <p><strong>Время генерации хештегов:</strong> {{ "%.2f"|format(analytics.hashtags_generation_time or 0) }}с</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Длина резюме:</strong> {{ analytics.summary_length or 0 }} символов</p>
+                            <p><strong>Количество хештегов:</strong> {{ analytics.hashtags_count or 0 }}</p>
+                            <p><strong>Просмотры:</strong> {{ analytics.views_count or 0 }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Оригинальный контент</h5>
+                </div>
+                <div class="card-body">
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        {{ article.original_content|nl2br|safe }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Действия</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{{ url_for('post_article', article_id=article.id) }}" class="mb-3">
+                        <div class="form-group mb-2">
+                            <label for="channel_id">ID канала (опционально):</label>
+                            <input type="text" class="form-control" id="channel_id" name="channel_id" placeholder="Оставьте пустым для использования канала по умолчанию">
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Опубликовать статью</button>
+                    </form>
+                    
+                    <form method="post" action="{{ url_for('delete_article', article_id=article.id) }}" onsubmit="return confirm('Вы уверены, что хотите удалить эту статью?');">
+                        <button type="submit" class="btn btn-danger w-100">Удалить статью</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>История публикаций</h5>
+                </div>
+                <div class="card-body">
+                    {% if posting_logs %}
+                        <ul class="list-group">
+                            {% for log in posting_logs %}
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>{{ log.posted_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                                        {% if log.status == 'success' %}
+                                            <span class="badge bg-success">Успешно</span>
+                                        {% elif log.status == 'failed' %}
+                                            <span class="badge bg-danger">Ошибка</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ log.status }}</span>
+                                        {% endif %}
+                                    </div>
+                                    <div>Канал: {{ log.channel_id }}</div>
+                                    {% if log.message_id %}
+                                        <div>ID сообщения: {{ log.message_id }}</div>
+                                    {% endif %}
+                                    {% if log.error_message %}
+                                        <div class="text-danger">{{ log.error_message }}</div>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted">Нет истории публикаций</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
