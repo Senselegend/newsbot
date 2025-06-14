@@ -1,3 +1,4 @@
+# Last modified: 2024-03-26
 def validate_summary_quality(summary):
     """
     Проверяет качество резюме

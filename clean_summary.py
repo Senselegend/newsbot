@@ -1,3 +1,4 @@
+# Last modified: 2024-03-26
 def clean_summary(summary):
     """
     Очищает и форматирует сгенерированное резюме

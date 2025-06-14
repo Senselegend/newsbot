@@ -1,3 +1,4 @@
+# Last modified: 2024-03-26
 def fix_political_references(text):
     """
     Исправляет некорректные упоминания политиков и форматирует текст
