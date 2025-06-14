@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 class NewsArticle(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    url = db.Column(db.String(255), unique=True, nullable=False)  # Added 'url' attribute
-    title = db.Column(db.String(255), nullable=True)  # было False
-    original_content = db.Column(db.Text, nullable=True)  # было False
+    url = db.Column(db.String(255), unique=True, nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    original_content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False)
     summary = db.Column(db.Text, nullable=True)
     hashtags = db.Column(db.String(255), nullable=True)
@@ -26,6 +26,14 @@ class NewsArticle(db.Model):
 
     def __init__(self, **kwargs):
         super().__init__()
+        # Validate required fields
+        required_fields = ['url', 'title', 'original_content']
+        for field in required_fields:
+            if field not in kwargs:
+                raise ValueError(f"Required field '{field}' is missing")
+            if not kwargs[field]:
+                raise ValueError(f"Field '{field}' cannot be empty")
+                
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -59,16 +67,16 @@ class NewsArticle(db.Model):
             return 0
 
 class BotSettings(db.Model):
-    ai_provider = db.Column(db.String(20), default="openrouter")  # openrouter или gemini
     id = db.Column(db.Integer, primary_key=True)
+    ai_provider = db.Column(db.String(20), nullable=False, default="openrouter")
     channel_id = db.Column(db.String(100), nullable=True)
-    posting_enabled = db.Column(db.Boolean, default=False)
-    posting_interval = db.Column(db.Integer, default=60)  # minutes
-    max_articles_per_day = db.Column(db.Integer, default=100)
-    custom_hashtags = db.Column(db.String(500), default="#новости #smartlab")
-    summary_style = db.Column(db.String(50), default="formal")  # engaging, formal, casual
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    posting_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    posting_interval = db.Column(db.Integer, nullable=False, default=60)
+    max_articles_per_day = db.Column(db.Integer, nullable=False, default=100)
+    custom_hashtags = db.Column(db.String(500), nullable=False, default="#новости #smartlab")
+    summary_style = db.Column(db.String(50), nullable=False, default="formal")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     @staticmethod
     def get_current():

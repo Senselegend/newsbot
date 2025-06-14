@@ -5,13 +5,13 @@ import logging
 import re
 import time
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Optional, Tuple, TypedDict, Union, Any
+from typing import List, Dict, Optional, Tuple, TypedDict, Union, Any, Sequence, cast, TypeVar
 from urllib.parse import urljoin, urlparse
 from zoneinfo import ZoneInfo
 
 # Third-party imports
 import requests
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Tag, NavigableString, ResultSet, PageElement
 import trafilatura
 from dotenv import load_dotenv
 
@@ -24,7 +24,9 @@ load_dotenv()
 # Configure logging
 logger = logging.getLogger(__name__)
 
-class ArticleData(TypedDict):
+T = TypeVar('T')
+
+class ArticleData(TypedDict, total=False):
     url: str
     title: str
     preview: str
@@ -33,7 +35,7 @@ class ArticleData(TypedDict):
     quotes: List[str]
     tags: List[str]
 
-class NewsItem(TypedDict):
+class NewsItem(TypedDict, total=False):
     url: str
     title: str
     preview: str
@@ -53,10 +55,10 @@ class SmartLabScraper:
             'Upgrade-Insecure-Requests': '1',
         })
         # Кэш для хранения результатов парсинга
-        self._cache: Dict[str, Tuple[float, Union[List[NewsItem], ArticleData]]] = {}
+        self._cache: Dict[str, Tuple[float, Union[List[Dict[str, Any]], Dict[str, Any]]]] = {}
         self._cache_ttl = 3600  # 1 час
 
-    def _get_cached_data(self, url: str) -> Optional[Union[List[NewsItem], ArticleData]]:
+    def _get_cached_data(self, url: str) -> Optional[Union[List[Dict[str, Any]], Dict[str, Any]]]:
         """Получает кэшированные данные по URL"""
         if url in self._cache:
             timestamp, data = self._cache[url]
@@ -64,7 +66,7 @@ class SmartLabScraper:
                 return data
         return None
 
-    def _cache_data(self, url: str, data: Union[List[NewsItem], ArticleData]) -> None:
+    def _cache_data(self, url: str, data: Union[List[Dict[str, Any]], Dict[str, Any]]) -> None:
         """Сохраняет данные в кэш"""
         self._cache[url] = (time.time(), data)
         # Ограничиваем размер кэша
@@ -73,53 +75,91 @@ class SmartLabScraper:
             oldest_url = min(self._cache.items(), key=lambda x: x[1][0])[0]
             self._cache.pop(oldest_url)
 
-    def get_latest_news(self, limit: int = 20) -> List[Dict]:
+    def _is_tag(self, element: Any) -> bool:
+        """Проверяет, является ли элемент тегом"""
+        return isinstance(element, Tag)
+
+    def _safe_get_attr(self, tag: Any, attr: str) -> Optional[str]:
+        """Безопасное получение атрибута тега"""
+        if not self._is_tag(tag):
+            return None
+        value = cast(Tag, tag).get(attr)
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list) and all(isinstance(x, str) for x in value):
+            return value[0] if value else None
+        return None
+
+    def _safe_get_text(self, tag: Any) -> str:
+        """Безопасное получение текста тега"""
+        if isinstance(tag, NavigableString):
+            return str(tag)
+        if self._is_tag(tag):
+            return cast(Tag, tag).get_text(strip=True)
+        return ""
+
+    def _safe_urljoin(self, base: str, url: str) -> str:
+        """Безопасное объединение URL"""
+        try:
+            return urljoin(base, url)
+        except Exception:
+            return url
+
+    def get_latest_news(self, limit: int = 20) -> List[Dict[str, Any]]:
         try:
             # Проверяем кэш
             cached_data = self._get_cached_data(f"{self.base_url}#limit={limit}")
-            if cached_data:
+            if cached_data and isinstance(cached_data, list):
                 logger.info("Используем кэшированные данные для SmartLab")
-                return cached_data[:limit]
+                return list(cached_data)[:limit]
                 
             start_time = time.time()
             response = self.session.get(self.base_url, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
-            articles = []
+            articles: List[Dict[str, Any]] = []
             news_items = soup.find_all(['article', 'div'], class_=re.compile(r'(news|article|item|post)', re.I))
             if not news_items:
                 news_items = soup.find_all('a', href=re.compile(r'/read/\\d+'))
             for item in news_items[:limit]:
                 try:
                     link_elem = None
-                    if isinstance(item, Tag) and getattr(item, 'name', None) == 'a':
+                    if self._is_tag(item) and cast(Tag, item).name == 'a':
                         link_elem = item
-                    elif isinstance(item, Tag):
-                        link_elem = item.find('a', href=re.compile(r'/read/\\d+'))
-                    if not (isinstance(link_elem, Tag) and link_elem.has_attr('href')):
+                    elif self._is_tag(item):
+                        link_elem = cast(Tag, item).find('a', href=re.compile(r'/read/\\d+'))
+                    
+                    if not self._is_tag(link_elem):
                         continue
-                    url = str(link_elem['href'])
+                        
+                    href = self._safe_get_attr(link_elem, 'href')
+                    if not href:
+                        continue
+                        
+                    url = str(href)
                     if url.startswith('/'):
-                        url = urljoin(self.base_url, url)
+                        url = self._safe_urljoin(self.base_url, url)
                     elif not url.startswith('http'):
                         continue
-                    title = link_elem.get_text(strip=True)
-                    if not title and isinstance(item, Tag):
-                        title_elem = item.find(['h1', 'h2', 'h3', 'h4', 'span'])
-                        title = title_elem.get_text(strip=True) if title_elem else "Без заголовка"
+                        
+                    title = self._safe_get_text(link_elem)
+                    if not title and self._is_tag(item):
+                        title_elem = cast(Tag, item).find(['h1', 'h2', 'h3', 'h4', 'span'])
+                        title = self._safe_get_text(title_elem) if title_elem else "Без заголовка"
                     if len(title) < 10:
                         continue
+                        
                     preview = ""
-                    if isinstance(item, Tag):
-                        preview_elem = item.find(['p', 'div'])
+                    if self._is_tag(item):
+                        preview_elem = cast(Tag, item).find(['p', 'div'])
                         if preview_elem:
-                            preview = preview_elem.get_text(strip=True)[:200]
+                            preview = self._safe_get_text(preview_elem)[:200]
                         
                         # Извлекаем дату публикации
                         published_at = None
-                        date_elem = item.find(class_=re.compile(r'(?i)(date|time|published)'))
+                        date_elem = cast(Tag, item).find(class_=re.compile(r'(?i)(date|time|published)'))
                         if date_elem:
-                            date_text = date_elem.get_text(strip=True)
+                            date_text = self._safe_get_text(date_elem)
                             try:
                                 # Пытаемся распознать дату
                                 if re.search(r'\d{2}\.\d{2}\.\d{4}', date_text):
@@ -151,14 +191,14 @@ class SmartLabScraper:
             logger.error(f"Error scraping SmartLab news: {e}")
             return []
 
-    def get_article_content(self, url: str) -> Optional[Dict]:
+    def get_article_content(self, url: str) -> Optional[Dict[str, Any]]:
         """
         Get full article content from a specific URL
         Returns dictionary with title, content, tags, quotes
         """
         # Проверяем кэш
         cached_data = self._get_cached_data(url)
-        if cached_data:
+        if cached_data and isinstance(cached_data, dict):
             logger.info(f"Используем кэшированные данные для статьи: {url}")
             return cached_data
             
@@ -185,17 +225,17 @@ class SmartLabScraper:
             title = ""
             title_elem = soup.find(['h1', 'h2'], class_=re.compile(r'(title|heading)', re.I))
             if title_elem:
-                title = title_elem.get_text(strip=True)
+                title = self._safe_get_text(title_elem)
             else:
                 # Fallback to trafilatura title extraction
                 title_match = re.search(r'^([^\n]+)', content)
                 title = title_match.group(1) if title_match else "Без заголовка"
             
             # Extract quotes (important for preserving them fully as requested)
-            quotes = []
+            quotes: List[str] = []
             quote_elements = soup.find_all(['blockquote', 'q', 'cite'])
             for quote_elem in quote_elements:
-                quote_text = quote_elem.get_text(strip=True)
+                quote_text = self._safe_get_text(quote_elem)
                 if len(quote_text) > 20:  # Only meaningful quotes
                     quotes.append(quote_text)
             
@@ -205,10 +245,10 @@ class SmartLabScraper:
             quotes.extend([q.strip() for q in content_quotes])
             
             # Extract tags/categories
-            tags = []
+            tags: List[str] = []
             tag_elements = soup.find_all(['a', 'span'], class_=re.compile(r'(tag|category|label)', re.I))
             for tag_elem in tag_elements:
-                tag_text = tag_elem.get_text(strip=True)
+                tag_text = self._safe_get_text(tag_elem)
                 if tag_text and len(tag_text) < 50:  # Reasonable tag length
                     tags.append(tag_text.lower())
             
@@ -216,7 +256,7 @@ class SmartLabScraper:
             published_at = None
             date_elem = soup.find(class_=re.compile(r'(?i)(date|time|published)'))
             if date_elem:
-                date_text = date_elem.get_text(strip=True)
+                date_text = self._safe_get_text(date_elem)
                 try:
                     # Пытаемся распознать дату
                     if re.search(r'\d{2}\.\d{2}\.\d{4}', date_text):
@@ -228,7 +268,7 @@ class SmartLabScraper:
                 except ValueError:
                     pass
             
-            result = {
+            result: Dict[str, Any] = {
                 'title': title,
                 'content': content,
                 'quotes': quotes,
@@ -249,13 +289,13 @@ class SmartLabScraper:
             logger.error(f"Error getting article content from {url}: {e}")
             return None
 
-    def get_latest_rbc(self, limit: int = 20) -> list[dict]:
+    def get_latest_rbc(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Получить свежие новости с rbc.ru"""
         # Проверяем кэш
         cached_data = self._get_cached_data("https://www.rbc.ru/#limit=" + str(limit))
-        if cached_data:
+        if cached_data and isinstance(cached_data, list):
             logger.info("Используем кэшированные данные для RBC")
-            return cached_data[:limit]
+            return list(cached_data)[:limit]
             
         logger.warning("Вызван get_latest_rbc")
         url = "https://www.rbc.ru/"
@@ -264,7 +304,7 @@ class SmartLabScraper:
             resp = self.session.get(url, timeout=20)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.content, 'html.parser')
-            articles = []
+            articles: List[Dict[str, Any]] = []
             
             # Пробуем разные селекторы для поиска новостей
             news_items = soup.find_all('a', class_=re.compile(r'(?i)main__feed__link'))
@@ -279,29 +319,30 @@ class SmartLabScraper:
             
             for item in news_items:
                 try:
-                    if not isinstance(item, Tag):
+                    if not self._is_tag(item):
                         continue
                     
-                    if not item.has_attr('href'):
+                    href = self._safe_get_attr(item, 'href')
+                    if not href:
                         continue
                         
-                    news_url = item['href']
+                    news_url = str(href)
                     if not news_url.startswith('http'):
-                        news_url = urljoin(url, news_url)
+                        news_url = self._safe_urljoin(url, news_url)
                         
-                    title = item.get_text(strip=True)
+                    title = self._safe_get_text(item)
                     if not title:
-                        title_elem = item.find(['h1', 'h2', 'h3', 'h4', 'span'])
+                        title_elem = cast(Tag, item).find(['h1', 'h2', 'h3', 'h4', 'span'])
                         if title_elem:
-                            title = title_elem.get_text(strip=True)
+                            title = self._safe_get_text(title_elem)
                             
                     if not news_url or not title or len(title) < 10:
                         continue
                         
                     preview = ""
-                    preview_elem = item.find(['p', 'div', 'span'], class_=re.compile(r'(?i)(preview|summary|description)'))
+                    preview_elem = cast(Tag, item).find(['p', 'div', 'span'], class_=re.compile(r'(?i)(preview|summary|description)'))
                     if preview_elem:
-                        preview = preview_elem.get_text(strip=True)[:200]
+                        preview = self._safe_get_text(preview_elem)[:200]
                     
                     # Извлекаем дату публикации из URL
                     published_at = None
@@ -338,13 +379,13 @@ class SmartLabScraper:
             logger.error(f"Error scraping RBC: {e}")
             return []
     
-    def get_latest_vedomosti(self, limit: int = 20) -> List[Dict]:
+    def get_latest_vedomosti(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Получить свежие новости с vedomosti.ru"""
         # Проверяем кэш
         cached_data = self._get_cached_data("https://www.vedomosti.ru/economics#limit=" + str(limit))
-        if cached_data:
+        if cached_data and isinstance(cached_data, list):
             logger.info("Используем кэшированные данные для Vedomosti")
-            return cached_data[:limit]
+            return list(cached_data)[:limit]
             
         url = "https://www.vedomosti.ru/economics"
         try:
@@ -352,7 +393,7 @@ class SmartLabScraper:
             resp = self.session.get(url, timeout=20)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.content, 'html.parser')
-            articles = []
+            articles: List[Dict[str, Any]] = []
             
             news_items = soup.find_all('a', class_=re.compile(r'(?i)(article|news-item)'))
             if not news_items:
@@ -363,35 +404,41 @@ class SmartLabScraper:
             for item in news_items[:limit]:
                 try:
                     # Извлекаем URL
-                    if isinstance(item, Tag) and item.name == 'a' and item.has_attr('href'):
-                        news_url = item['href']
-                    else:
-                        link_elem = item.find('a')
-                        if not link_elem or not link_elem.has_attr('href'):
+                    if self._is_tag(item) and cast(Tag, item).name == 'a':
+                        href = self._safe_get_attr(item, 'href')
+                        if not href:
                             continue
-                        news_url = link_elem['href']
+                        news_url = str(href)
+                    else:
+                        link_elem = cast(Tag, item).find('a') if self._is_tag(item) else None
+                        if not link_elem or not self._is_tag(link_elem):
+                            continue
+                        href = self._safe_get_attr(link_elem, 'href')
+                        if not href:
+                            continue
+                        news_url = str(href)
                         
                     if not news_url.startswith('http'):
-                        news_url = urljoin(url, news_url)
+                        news_url = self._safe_urljoin(url, news_url)
                     
                     # Извлекаем заголовок
-                    title_elem = item.find(['h1', 'h2', 'h3', 'h4', 'span'], class_=re.compile(r'(?i)(title|heading)'))
-                    title = title_elem.get_text(strip=True) if title_elem else item.get_text(strip=True)
+                    title_elem = cast(Tag, item).find(['h1', 'h2', 'h3', 'h4', 'span'], class_=re.compile(r'(?i)(title|heading)'))
+                    title = self._safe_get_text(title_elem) if title_elem else self._safe_get_text(item)
                     
                     if not title or len(title) < 10:
                         continue
                     
                     # Извлекаем превью
                     preview = ""
-                    preview_elem = item.find(['p', 'div'], class_=re.compile(r'(?i)(preview|summary|description)'))
+                    preview_elem = cast(Tag, item).find(['p', 'div'], class_=re.compile(r'(?i)(preview|summary|description)'))
                     if preview_elem:
-                        preview = preview_elem.get_text(strip=True)[:200]
+                        preview = self._safe_get_text(preview_elem)[:200]
                     
                     # Извлекаем дату публикации
                     published_at = None
-                    date_elem = item.find(class_=re.compile(r'(?i)(date|time|published)'))
+                    date_elem = cast(Tag, item).find(class_=re.compile(r'(?i)(date|time|published)'))
                     if date_elem:
-                        date_text = date_elem.get_text(strip=True)
+                        date_text = self._safe_get_text(date_elem)
                         try:
                             # Пытаемся распознать дату
                             if re.search(r'\d{2}\.\d{2}\.\d{4}', date_text):

@@ -46,13 +46,15 @@ class AIService:
             # Удаляем случайный элемент
             self._cache.pop(next(iter(self._cache)))
 
-    def _call_openrouter_api(self, payload, api_key=None):
+    def _call_openrouter_api(self, payload: Dict[str, Any], api_key: Optional[str] = None) -> Dict[str, Any]:
+        """Calls OpenRouter API with proper error handling"""
         url = "https://openrouter.ai/api/v1/chat/completions"
         key = api_key or self.api_key
         if key:
             logger.debug(f"Вызов OpenRouter API с ключом: {key[:5]}...")
         else:
             logger.warning("Вызов OpenRouter API без ключа")
+            raise ValueError("API key is required for OpenRouter API calls")
         headers = {
             "Authorization": f"Bearer {key}" if key else "",
             "Content-Type": "application/json",
@@ -77,7 +79,8 @@ class AIService:
     def _fix_political_references(self, text: str) -> str:
         return fix_political_references(text)
         
-    def build_summary_prompt(self, article_data, style):
+    def build_summary_prompt(self, article_data: Dict[str, Any], style: str) -> str:
+        """Builds a prompt for article summarization"""
         title = article_data.get('title', '')
         content = article_data.get('content', '')
         quotes = article_data.get('quotes', [])
@@ -236,7 +239,8 @@ class AIService:
             logger.error(f"Unknown ai_provider: {self.ai_provider}")
             return None
 
-    def build_hashtag_prompt(self, article_data, custom_tags=""):
+    def build_hashtag_prompt(self, article_data: Dict[str, Any], custom_tags: str = "") -> str:
+        """Builds a prompt for hashtag generation"""
         title = article_data.get('title', '')
         content = article_data.get('content', '')[:1000]
         existing_tags = article_data.get('tags', [])

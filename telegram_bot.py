@@ -1,12 +1,13 @@
 # Last modified: 2024-03-26
 from dotenv import load_dotenv
+import re
 
 load_dotenv()
 import os
 import logging
 import asyncio
 import requests
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from app import db
 from models import PostingLog, BotSettings
 
@@ -218,9 +219,50 @@ class TelegramBotService:
         """
         return self.test_channel_access(channel_id)
 
-    def format_message_for_telegram(self, summary: str, hashtags: list, url: str) -> str:
+    def _normalize_text_case(self, text: str) -> str:
+        """Normalizes text case for better readability"""
+        if not text:
+            return ""
+            
+        # Split into sentences
+        sentences = re.split(r'([.!?]\s+)', text)
+        normalized = []
+        
+        for i in range(0, len(sentences), 2):
+            sentence = sentences[i]
+            if i + 1 < len(sentences):
+                sentence += sentences[i + 1]
+                
+            # Capitalize first letter of each sentence
+            if sentence.strip():
+                sentence = sentence[0].upper() + sentence[1:]
+            normalized.append(sentence)
+            
+        return ''.join(normalized)
+
+    def _escape_html(self, text: str) -> str:
+        """Escapes HTML special characters in text"""
+        if not text:
+            return ""
+            
+        html_escape_table = {
+            "&": "&amp;",
+            '"': "&quot;",
+            "'": "&apos;",
+            ">": "&gt;",
+            "<": "&lt;",
+        }
+        return "".join(html_escape_table.get(c, c) for c in text)
+
+    def format_message_for_telegram(self, summary: str, hashtags: List[str], url: str) -> str:
         """
         Format message for Telegram posting with hashtags as header
+        Args:
+            summary: The article summary text
+            hashtags: List of hashtags to include
+            url: Source article URL
+        Returns:
+            Formatted message string
         """
         # Clean up summary - remove excessive caps
         formatted_summary = self._normalize_text_case(summary) if summary else ""
@@ -242,52 +284,5 @@ class TelegramBotService:
         else:
             message_parts.append(formatted_summary)
         
-        # Add source link (временно отключено)
-        # message_parts.append(f"<a href=\"{url}\">Источник</a>")
-        
         # Join with single line break between hashtags and summary
         return '\n'.join(message_parts)
-        
-    def _escape_html(self, text: str) -> str:
-        """
-        Экранирует специальные HTML символы в тексте
-        """
-        if not text:
-            return ""
-            
-        # Заменяем специальные символы HTML
-        replacements = [
-            ('&', '&amp;'),
-            ('<', '&lt;'),
-            ('>', '&gt;')
-        ]
-        
-        for old, new in replacements:
-            text = text.replace(old, new)
-            
-        return text
-
-    def _normalize_text_case(self, text: str) -> str:
-        """
-        Convert excessive caps to normal sentence case
-        """
-        if not text:
-            return text
-        
-        # If more than 70% of letters are uppercase, convert to sentence case
-        letters = [c for c in text if c.isalpha()]
-        if letters:
-            upper_count = sum(1 for c in letters if c.isupper())
-            if upper_count / len(letters) > 0.7:
-                # Convert to sentence case
-                sentences = text.split('. ')
-                normalized_sentences = []
-                for sentence in sentences:
-                    if sentence:
-                        # Capitalize first letter, lowercase the rest, but preserve quotes and special formatting
-                        sentence = sentence.lower()
-                        sentence = sentence[0].upper() + sentence[1:] if len(sentence) > 1 else sentence.upper()
-                    normalized_sentences.append(sentence)
-                text = '. '.join(normalized_sentences)
-        
-        return text
